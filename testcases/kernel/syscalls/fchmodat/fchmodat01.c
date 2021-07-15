@@ -45,9 +45,12 @@
 #include "safe_macros.h"
 #include "lapi/syscalls.h"
 
-#define TEST_CASES 6
+#define TEST_CASES 8
 #ifndef AT_FDCWD
 #define AT_FDCWD -100
+#endif
+#ifndef AT_SYMLINK_NOFOLLOW
+#define AT_SYMLINK_NOFOLLOW 0x100
 #endif
 void setup();
 void cleanup();
@@ -60,11 +63,12 @@ char testfile2[256];
 char testfile3[256];
 int fds[TEST_CASES];
 char *filenames[TEST_CASES];
-int expected_errno[TEST_CASES] = { 0, 0, ENOTDIR, EBADF, 0, 0 };
+int flags[TEST_CASES];
+int expected_errno[TEST_CASES] = { 0, 0, ENOTDIR, EBADF, 0, 0, EINVAL, ENOTSUP };
 
-int myfchmodat(int dirfd, const char *filename, mode_t mode)
+int myfchmodat(int dirfd, const char *filename, mode_t mode, int flags)
 {
-	return ltp_syscall(__NR_fchmodat, dirfd, filename, mode);
+	return ltp_syscall(__NR_fchmodat, dirfd, filename, mode, flags);
 }
 
 int main(int ac, char **av)
@@ -87,7 +91,7 @@ int main(int ac, char **av)
 		tst_count = 0;
 
 		for (i = 0; i < TST_TOTAL; i++) {
-			TEST(myfchmodat(fds[i], filenames[i], 0600));
+			TEST(myfchmodat(fds[i], filenames[i], 0600, flags[i]));
 
 			if (TEST_ERRNO == expected_errno[i]) {
 				tst_resm(TPASS,
@@ -125,7 +129,7 @@ void setup(void)
 	SAFE_MKDIR(cleanup, pathname, 0700);
 
 	fds[0] = SAFE_OPEN(cleanup, pathname, O_DIRECTORY);
-	fds[1] = fds[4] = fds[0];
+	fds[1] = fds[4] = fds[6] = fds[7] = fds[0];
 
 	SAFE_FILE_PRINTF(cleanup, testfile, "%s", testfile);
 	SAFE_FILE_PRINTF(cleanup, testfile2, "%s", testfile2);
@@ -134,10 +138,13 @@ void setup(void)
 	fds[3] = 100;
 	fds[5] = AT_FDCWD;
 
-	filenames[0] = filenames[2] = filenames[3] = filenames[4] = testfile;
+	filenames[0] = filenames[2] = filenames[3] = filenames[4] = filenames[6] = filenames[7] = testfile;
 	filenames[1] = testfile2;
 	filenames[5] = testfile3;
 
+	flags[0] = flags[1] = flags[2] = flags[3] = flags[4] = flags[5] = 0;
+	flags[6] = 3;
+	flags[7] = AT_SYMLINK_NOFOLLOW;
 	TEST_PAUSE;
 }
 
